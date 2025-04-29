@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gestão de Pátio Ferroviário</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9; }
+    select, input, button { margin: 5px; padding: 8px; }
+    .linha-container, .patio-container { margin-top: 15px; padding: 10px; background: #fff; border: 1px solid #ccc; border-radius: 8px; }
+    .relatorio { margin-top: 20px; white-space: pre-wrap; background: #eee; padding: 10px; border-radius: 8px; }
+    .progress-bar { height: 20px; background: #e0e0e0; border-radius: 10px; margin: 10px 0; overflow: hidden; }
+    .progress { height: 100%; background: #4CAF50; transition: width 0.3s; text-align: center; color: white; }
+    .excesso { background: #f44336; }
+    .modelo-row, .linha-nova-row { display: flex; align-items: center; margin: 5px 0; }
+    .btn-remove { background: #F44336; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-left: 10px; }
+    .sugestao { background: #FFF3E0; padding: 10px; margin-top: 10px; border-left: 4px solid #FFA000; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <h2>Gestão de Pátio Ferroviário</h2>
+
+  <label for="patioSelect">Selecione um Pátio:</label>
+  <select id="patioSelect" onchange="atualizarLinhas()">
+    <option value="">-- Escolha o Pátio --</option>
+    <option value="IPA">IPA</option>
+  </select>
+  <button onclick="mostrarFormularioPatio()">+ Novo Pátio</button>
+
+  <div id="formularioPatio" style="display:none;" class="patio-container">
+    <h3>Criar Novo Pátio</h3>
+    <input type="text" id="nomePatio" placeholder="Nome do Pátio" />
+    <div id="novasLinhas"></div>
+    <button onclick="adicionarLinhaNova()">+ Adicionar Linha</button><br/>
+    <button onclick="salvarPatio()">Salvar Pátio</button>
+  </div>
+
+  <br>
+
+  <label for="linhaSelect">Selecione uma Linha:</label>
+  <select id="linhaSelect">
+    <option value="">-- Escolha uma Linha --</option>
+  </select>
+
+  <div class="linha-container">
+    <h3>Adicionar Vagões</h3>
+    <div id="modelos-container"></div>
+    <button onclick="adicionarModelo()">+ Adicionar outro modelo</button>
+  </div>
+
+  <button onclick="adicionarVagoes()">Adicionar Vagões</button>
+  <button onclick="limparComposicao()">Limpar</button>
+  <button onclick="exportarPDF()">Exportar PDF</button>
+
+  <div id="relatorio" class="relatorio">Composição exportada aparece aqui...</div>
+
+  <script>
+    const patios = {
+      "IPA": {
+        "Linha 1": 343.5, "Linha 2": 303.6, "Linha 3": 301.0,
+        "Linha 4": 306.9, "Linha 5": 275.0, "Linha 6": 335.0,
+        "Linha 7": 280.0, "Linha 8": 394.3, "Linha 9": 280.0,
+        "Linha 10": 514.0, "Terminal": 219.0,
+        "DM12": 550.0, "DM14": 340.0, "DM16": 0
+      }
+    };
+
+    const modelos = [
+      { nome: "PDR (13m)", valor: 13 },
+      { nome: "PBS Curto (14m)", valor: 14 },
+      { nome: "PET 755 (15m)", valor: 15 },
+      { nome: "PCS (15m)", valor: 15 },
+      { nome: "PBS Médio (16m)", valor: 16 },
+      { nome: "PES (19m)", valor: 19 },
+      { nome: "PBS Longo/PDS (19m)", valor: 19 },
+      { nome: "PET 624/616 (19m)", valor: 19 },
+      { nome: "FLT (22m)", valor: 22 },
+      { nome: "PCR (27m)", valor: 27 },
+      { nome: "PCT (27m)", valor: 27 },
+      { nome: "PGS (27m)", valor: 27 },
+      { nome: "PRU (83m)", valor: 83 }
+    ];
+
+    let composicao = {};
+    let modeloCount = 0;
+    let linhaNovaCount = 0;
+
+    function atualizarLinhas() {
+      const patioSelecionado = document.getElementById('patioSelect').value;
+      const linhaSelect = document.getElementById('linhaSelect');
+      linhaSelect.innerHTML = '<option value="">-- Escolha uma Linha --</option>';
+
+      if (patios[patioSelecionado]) {
+        for (const linha in patios[patioSelecionado]) {
+          const option = document.createElement('option');
+          option.value = linha;
+          option.textContent = `${linha} - ${patios[patioSelecionado][linha]}m`;
+          linhaSelect.appendChild(option);
+        }
+      }
+    }
+
+    function adicionarModelo() {
+      const container = document.getElementById('modelos-container');
+      const div = document.createElement('div');
+      div.className = 'modelo-row';
+      div.id = `modelo-${modeloCount}`;
+
+      const select = document.createElement('select');
+      modelos.forEach(modelo => {
+        const option = document.createElement('option');
+        option.value = modelo.valor;
+        option.textContent = modelo.nome;
+        select.appendChild(option);
+      });
+
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.min = '1';
+      input.value = '1';
+
+      const button = document.createElement('button');
+      button.className = 'btn-remove';
+      button.textContent = 'Remover';
+      button.onclick = function () {
+        container.removeChild(div);
+      };
+
+      div.appendChild(select);
+      div.appendChild(input);
+      div.appendChild(button);
+      container.appendChild(div);
+      modeloCount++;
+    }
+
+    function adicionarVagoes() {
+      const linha = document.getElementById('linhaSelect').value;
+      const patio = document.getElementById('patioSelect').value;
+      if (!linha || !patio) return alert('Selecione um pátio e uma linha!');
+      if (!composicao[linha]) composicao[linha] = [];
+
+      const modelosRows = document.querySelectorAll('#modelos-container .modelo-row');
+      modelosRows.forEach(row => {
+        const select = row.querySelector('select');
+        const nomeModelo = select.options[select.selectedIndex].text;
+        const metragem = parseFloat(select.value);
+        const qtd = parseInt(row.querySelector('input').value);
+        composicao[linha].push({ nome: nomeModelo, qtd: qtd, metragem: metragem });
+      });
+
+      gerarRelatorio();
+    }
+
+    function gerarRelatorio() {
+      let output = '';
+      const patioSelecionado = document.getElementById('patioSelect').value;
+      const linhasDisponiveis = patios[patioSelecionado];
+
+      for (const linha in composicao) {
+        const capacidade = linhasDisponiveis[linha];
+        let total = 0;
+
+        output += `${linha} (${capacidade.toFixed(2)}m)\nComposição:\n`;
+
+        composicao[linha].forEach(v => {
+          const ocupado = v.qtd * v.metragem;
+          total += ocupado;
+          output += `- ${v.qtd}x ${v.nome} = ${ocupado.toFixed(2)}m\n`;
+        });
+
+        const porcentagem = (total / capacidade) * 100;
+        output += `Total ocupado: ${total.toFixed(2)}m (${porcentagem.toFixed(2)}%)\n`;
+
+        if (porcentagem > 100) {
+          output += `⚠️ Capacidade Excedida\n`;
+        } else {
+          output += `✅ Dentro da Capacidade\n`;
+        }
+
+        output += `\n\n`;
+      }
+
+      document.getElementById('relatorio').innerText = output;
+    }
+
+    function limparComposicao() {
+      composicao = {};
+      document.getElementById('modelos-container').innerHTML = '';
+      document.getElementById('relatorio').innerText = 'Composição exportada aparece aqui...';
+      document.getElementById('linhaSelect').value = '';
+      adicionarModelo();
+    }
+
+    function exportarPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const texto = document.getElementById('relatorio').innerText;
+      const linhas = doc.splitTextToSize(texto, 180);
+      doc.setFontSize(12);
+      doc.text(linhas, 10, 10);
+      doc.save("relatorio-composicao.pdf");
+    }
+
+    function mostrarFormularioPatio() {
+      document.getElementById('formularioPatio').style.display = 'block';
+      adicionarLinhaNova();
+    }
+
+    function adicionarLinhaNova() {
+      if (linhaNovaCount >= 20) {
+        alert('Limite de 20 linhas atingido!');
+        return;
+      }
+
+      const container = document.getElementById('novasLinhas');
+      const div = document.createElement('div');
+      div.className = 'linha-nova-row';
+      div.id = `linhaNova-${linhaNovaCount}`;
+
+      const inputNome = document.createElement('input');
+      inputNome.type = 'text';
+      inputNome.placeholder = 'Nome da Linha';
+
+      const inputMetragem = document.createElement('input');
+      inputMetragem.type = 'number';
+      inputMetragem.placeholder = 'Metragem (m)';
+
+      const button = document.createElement('button');
+      button.className = 'btn-remove';
+      button.textContent = 'Remover';
+      button.onclick = function () {
+        container.removeChild(div);
+      };
+
+      div.appendChild(inputNome);
+      div.appendChild(inputMetragem);
+      div.appendChild(button);
+      container.appendChild(div);
+
+      linhaNovaCount++;
+    }
+
+    function salvarPatio() {
+      const nomePatio = document.getElementById('nomePatio').value.trim();
+      if (!nomePatio) {
+        alert('Digite um nome para o pátio!');
+        return;
+      }
+
+      const linhasNovas = {};
+      const rows = document.querySelectorAll('#novasLinhas .linha-nova-row');
+      rows.forEach(row => {
+        const nome = row.querySelector('input[type=text]').value.trim();
+        const metragem = parseFloat(row.querySelector('input[type=number]').value);
+        if (nome && metragem > 0) {
+          linhasNovas[nome] = metragem;
+        }
+      });
+
+      if (Object.keys(linhasNovas).length === 0) {
+        alert('Adicione ao menos uma linha válida!');
+        return;
+      }
+
+      patios[nomePatio] = linhasNovas;
+
+      const patioSelect = document.getElementById('patioSelect');
+      const option = document.createElement('option');
+      option.value = nomePatio;
+      option.textContent = nomePatio;
+      patioSelect.appendChild(option);
+
+      document.getElementById('formularioPatio').style.display = 'none';
+      document.getElementById('nomePatio').value = '';
+      document.getElementById('novasLinhas').innerHTML = '';
+      linhaNovaCount = 0;
+      alert('Pátio salvo com sucesso!');
+    }
+  </script>
+
+  <!-- Campagnoli passou por aqui -->
+</body>
+</html>
